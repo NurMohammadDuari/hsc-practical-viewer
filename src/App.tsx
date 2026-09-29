@@ -134,6 +134,10 @@ export default function App() {
   const [compilationError, setCompilationError] = useState<string | null>(null);
   const [documentTitle, setDocumentTitle] = useState<string>('Chemistry 2nd Practical — Sadat Rahman Sarthok');
 
+  // Live thumbnails: one entry per page, filled as each page finishes downloading.
+  // null = still pending (rendered as a pulsing numbered slot).
+  const [pageThumbnails, setPageThumbnails] = useState<(string | null)[]>([]);
+
   // Extract a clean document title from the URL slug if available
   const extractTitleFromUrl = (url: string): string => {
     try {
@@ -224,6 +228,7 @@ export default function App() {
 
       setCompilationStep(`Downloading ${totalPagesToFetch} pages…`);
       setCompilationProgress(15);
+      setPageThumbnails(new Array(totalPagesToFetch).fill(null));
 
       // Pre-allocate slots to preserve page order
       const pageSlots: (HTMLImageElement | null)[] = new Array(totalPagesToFetch).fill(null);
@@ -239,15 +244,16 @@ export default function App() {
           proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(rawCdnUrl)}`;
         }
 
+        let loaded: HTMLImageElement | null = null;
         try {
-          const img = await loadImage(proxiedUrl);
-          pageSlots[p - 1] = img;
+          loaded = await loadImage(proxiedUrl);
+          pageSlots[p - 1] = loaded;
         } catch (_) {
           if (!pageImages || pageImages.length === 0) {
             const alternateUrl = `https://imgv2-2-f.scribdassets.com/img/document/${extractedId}/original/${secretKey}/${p}?v=1`;
             try {
-              const img = await loadImage(`/api/proxy-image?url=${encodeURIComponent(alternateUrl)}`);
-              pageSlots[p - 1] = img;
+              loaded = await loadImage(`/api/proxy-image?url=${encodeURIComponent(alternateUrl)}`);
+              pageSlots[p - 1] = loaded;
             } catch (_) {
               // Skip unavailable page
             }
@@ -258,6 +264,18 @@ export default function App() {
         const pct = 15 + Math.round((completedPagesCount / totalPagesToFetch) * 70);
         setCompilationProgress(pct);
         setCompilationStep(`Downloading ${completedPagesCount} of ${totalPagesToFetch} pages…`);
+
+        // Capture a small preview of the page the moment it arrives
+        if (loaded) {
+          const thumb = makeThumbnail(loaded);
+          if (thumb) {
+            setPageThumbnails((prev) => {
+              const next = [...prev];
+              next[p - 1] = thumb;
+              return next;
+            });
+          }
+        }
       };
 
       // Worker queue with 24 concurrent streams
@@ -308,14 +326,14 @@ export default function App() {
       setCompiledPdfUrl(blobUrl);
       setPreviewMode('pdf');
       setCompilationProgress(100);
+      setPageThumbnails([]);
       setIsCompiling(false);
     } catch (err: any) {
       setCompilationError(err.message || 'Something went wrong while processing the document. Please try again.');
+      setPageThumbnails([]);
       setIsCompiling(false);
     }
   };
-
-  // Load an image through the proxy as a decodable blob
   const loadImage = async (url: string): Promise<HTMLImageElement> => {
     const res = await fetch(url);
     if (!res.ok) throw new Error('Proxy fetch failed');
@@ -330,10 +348,28 @@ export default function App() {
     });
   };
 
+  // Draw a lightweight JPEG thumbnail of a page onto a canvas
+  const makeThumbnail = (img: HTMLImageElement): string | null => {
+    try {
+      const maxWidth = 160;
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.6);
+    } catch (_) {
+      return null;
+    }
+  };
+
   const handleClear = () => {
     setScribdUrl('');
     setCompiledPdfUrl(null);
     setCompilationError(null);
+    setPageThumbnails([]);
   };
 
   const loadChemistrySample = () => {
@@ -341,6 +377,7 @@ export default function App() {
     setDocumentId('835319016');
     setCompiledPdfUrl(null);
     setCompilationError(null);
+    setPageThumbnails([]);
   };
 
   const loadReferenceSample = () => {
@@ -348,6 +385,7 @@ export default function App() {
     setDocumentId('423214959');
     setCompiledPdfUrl(null);
     setCompilationError(null);
+    setPageThumbnails([]);
   };
 
   return (
@@ -536,6 +574,37 @@ export default function App() {
                     <span className="font-medium text-[var(--t-primary)]">{compilationProgress}%</span>
                   </div>
                 </div>
+
+                {/* Live page thumbnail grid */}
+                {pageThumbnails.length > 0 && (
+                  <div className="w-full">
+                    <div className="grid grid-cols-6 gap-1.5 max-h-44 overflow-y-auto pr-1">
+                      {pageThumbnails.map((thumb, i) =>
+                        thumb ? (
+                          <motion.img
+                            key={`page-${i}`}
+                            initial={{ opacity: 0, scale: 0.85 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.2 }}
+                            src={thumb}
+                            alt={`Page ${i + 1}`}
+                            className="w-full aspect-[3/4] object-cover object-top rounded-md border border-[var(--line)] bg-white"
+                          />
+                        ) : (
+                          <div
+                            key={`pending-${i}`}
+                            className="w-full aspect-[3/4] rounded-md border border-[var(--line)] bg-[var(--fill)] flex items-center justify-center text-[9px] font-medium text-[var(--t-tertiary)] animate-pulse"
+                          >
+                            {i + 1}
+                          </div>
+                        )
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[var(--t-tertiary)] text-center mt-2">
+                      {pageThumbnails.filter(Boolean).length} of {pageThumbnails.length} pages retrieved
+                    </p>
+                  </div>
+                )}
               </motion.div>
             )}
 

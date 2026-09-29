@@ -1,5 +1,5 @@
 // Service worker for HSC Practical Viewer PWA
-const CACHE_NAME = 'hsc-practical-viewer-v2';
+const CACHE_NAME = 'hsc-practical-viewer-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
