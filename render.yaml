@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: hsc-practical-viewer
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
