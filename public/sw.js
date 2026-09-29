@@ -1,10 +1,13 @@
 // Service worker for HSC Practical Viewer PWA
-const CACHE_NAME = 'hsc-practical-viewer-v3';
+const CACHE_NAME = 'hsc-practical-viewer-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/pwa_icon.jpg'
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/favicon.ico'
 ];
 
 self.addEventListener('install', (event) => {

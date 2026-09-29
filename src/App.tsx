@@ -393,7 +393,7 @@ export default function App() {
       {/* Header */}
       <header className="bg-[var(--surface)] backdrop-blur-xl border-b border-[var(--line)] px-4 sm:px-6 py-3 flex-shrink-0 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <img src="/pwa_icon.jpg" alt="App icon" className="w-9 h-9 rounded-[10px] object-cover shadow-sm" />
+          <img src="/icons/icon-192.png" alt="App icon" className="w-9 h-9 rounded-[10px] object-cover shadow-sm" />
           <div className="text-left">
             <h1 className="font-semibold text-[15px] sm:text-base tracking-tight text-[var(--t-primary)]">
               HSC Practical Viewer
@@ -778,7 +778,7 @@ export default function App() {
             </button>
 
             <div className="flex items-start gap-3">
-              <img src="/pwa_icon.jpg" alt="App icon" className="w-11 h-11 rounded-[10px] object-cover shadow-sm flex-shrink-0" />
+              <img src="/icons/icon-192.png" alt="App icon" className="w-11 h-11 rounded-[10px] object-cover shadow-sm flex-shrink-0" />
               <div className="flex-1 pr-5">
                 <h3 className="font-semibold text-sm text-[var(--t-primary)]">Install HSC Practical Viewer</h3>
                 <p className="text-[12px] text-[var(--t-secondary)] mt-0.5 leading-snug">
