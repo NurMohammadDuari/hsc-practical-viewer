@@ -1,6 +1,39 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+
+// ---------------------------------------------------------------------------
+// Download counter — a single honest number: PDFs actually compiled to
+// completion by real users. Persisted to disk so it survives restarts and
+// deploys. Starts at zero; only /api/stats/download with a non-empty
+// documentId increments it, so the count reflects genuine finished downloads.
+// ---------------------------------------------------------------------------
+const STATS_PATH = process.env.STATS_PATH || path.join(process.cwd(), '.data', 'download-stats.json');
+
+function loadDownloadCount(): number {
+  try {
+    if (fs.existsSync(STATS_PATH)) {
+      const parsed = JSON.parse(fs.readFileSync(STATS_PATH, 'utf8'));
+      const n = Number(parsed.totalDownloads);
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+    }
+  } catch (_) {
+    // Corrupt or unreadable file — fall through and start from zero.
+  }
+  return 0;
+}
+
+let totalDownloads = loadDownloadCount();
+
+function saveDownloadCount(): void {
+  try {
+    fs.mkdirSync(path.dirname(STATS_PATH), { recursive: true });
+    fs.writeFileSync(STATS_PATH, JSON.stringify({ totalDownloads, updatedAt: new Date().toISOString() }));
+  } catch (err: any) {
+    console.warn('[stats] Could not persist download count:', err.message);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -184,6 +217,24 @@ async function startServer() {
       console.error('[API] Error in /api/scribd-metadata:', err.message);
       res.status(500).json({ error: 'Failed to retrieve Scribd metadata: ' + err.message });
     }
+  });
+
+  // Public download counter
+  app.get('/api/stats', (req, res) => {
+    res.json({ totalDownloads });
+  });
+
+  // Incremented by the client only after a PDF has fully compiled
+  app.post('/api/stats/download', (req, res) => {
+    const docId = typeof req.body?.documentId === 'string' ? req.body.documentId.slice(0, 64) : '';
+    if (!docId) {
+      res.status(400).json({ error: 'documentId is required' });
+      return;
+    }
+    totalDownloads += 1;
+    saveDownloadCount();
+    console.log(`[stats] PDF completed (doc ${docId}) — total: ${totalDownloads}`);
+    res.json({ totalDownloads });
   });
 
   // In-memory buffer cache for proxied images

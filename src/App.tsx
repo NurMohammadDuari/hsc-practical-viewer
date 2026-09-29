@@ -16,6 +16,7 @@ import {
   FileDown,
   Sun,
   Moon,
+  FileCheck2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
@@ -42,6 +43,46 @@ export default function App() {
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+
+  // Live download counter: fetched immediately, then every 20s
+  const [totalDownloads, setTotalDownloads] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Number.isFinite(data?.totalDownloads)) {
+          setTotalDownloads(data.totalDownloads);
+        }
+      } catch (_) {
+        // Counter is decorative — ignore fetch failures
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 20000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Report a finished PDF to the server (fire-and-forget)
+  const reportDownload = (docId: string) => {
+    try {
+      const body = JSON.stringify({ documentId: docId });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/stats/download', new Blob([body], { type: 'application/json' }));
+      } else {
+        fetch('/api/stats/download', { method: 'POST', body, headers: { 'Content-Type': 'application/json' } }).catch(() => {});
+      }
+      setTotalDownloads((n) => (n === null ? 1 : n + 1));
+    } catch (_) {}
+  };
 
   // PWA install prompt states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -348,6 +389,7 @@ export default function App() {
       setCompilationProgress(100);
       setPageThumbnails([]);
       setIsCompiling(false);
+      reportDownload(extractedId);
     } catch (err: any) {
       setCompilationError(err.message || 'Something went wrong while processing the document. Please try again.');
       setPageThumbnails([]);
@@ -425,6 +467,24 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Live download counter */}
+          {totalDownloads !== null && (
+            <div
+              className="hidden sm:flex items-center gap-1.5 bg-[var(--fill)] text-[var(--t-secondary)] text-[11px] font-medium pl-2.5 pr-3 py-1.5 rounded-full"
+              title="PDFs compiled by this app, counted in real time"
+            >
+              <FileCheck2 className="w-3.5 h-3.5 text-[var(--success)]" />
+              <span className="text-[var(--t-primary)] font-semibold tabular-nums">
+                {totalDownloads.toLocaleString()}
+              </span>
+              <span>PDF{totalDownloads === 1 ? '' : 's'} made</span>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--success)] opacity-60"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[var(--success)]"></span>
+              </span>
+            </div>
+          )}
+
           {/* Theme toggle */}
           <button
             id="theme-toggle-btn"

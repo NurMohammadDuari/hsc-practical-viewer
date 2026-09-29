@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Runtime data (download counter persists here on the server)
+.data/
