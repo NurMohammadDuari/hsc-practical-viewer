@@ -1,0 +1,18 @@
+{
+  "short_name": "HSC Viewer",
+  "name": "HSC Practical Viewer",
+  "description": "View Scribd documents instantly or save them as high-quality PDFs",
+  "icons": [
+    {
+      "src": "/pwa_icon.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
+  "display": "standalone",
+  "orientation": "portrait"
+}
