@@ -77,8 +77,104 @@ async function startServer() {
       let secretKey = '';
       let thumbnailUrl = '';
       let html = '';
+      const embedCookieJar: string[] = [];
 
-      // Strategy 1: Fetch direct document page using Open Graph social crawler headers (bypasses bot challenges)
+      // Strategy 1: Fetch the embed page as WhatsApp (bypasses the JS challenge).
+      // This is the primary strategy: it exposes per-page image paths
+      // (images/{n}-{token}.jpg) under a session id, plus title & page count.
+      let embedSession = '';
+      const embedImagePaths = new Map<number, string>();
+      try {
+        const embedRes = await fetch(`https://www.scribd.com/embeds/${id}/content?start_page=1`, {
+          headers: {
+            'User-Agent': 'WhatsApp/2.23.20.0',
+            'Accept': '*/*'
+          },
+          redirect: 'follow',
+          signal: AbortSignal.timeout(8000)
+        });
+        if (embedRes.ok) {
+          const embedHtml = await embedRes.text();
+
+          // Session id, e.g. html.scribdassets.com/56d3fdjeioe77ksq/
+          const sessionMatch = embedHtml.match(/html\.scribdassets\.com\/([a-z0-9]+)\//i);
+          if (sessionMatch) embedSession = sessionMatch[1];
+
+          // Per-page image paths: images/{n}-{token}.jpg (pages may appear multiple times; keep first)
+          const imgRe = /images\/(\d+)-([a-f0-9]+)\.jpg/gi;
+          let m: RegExpExecArray | null;
+          while ((m = imgRe.exec(embedHtml)) !== null) {
+            const pageNum = parseInt(m[1], 10);
+            if (!embedImagePaths.has(pageNum)) {
+              embedImagePaths.set(pageNum, m[0]);
+            }
+          }
+
+          // Title & page count from the embed as fallbacks
+          const embedTitle = embedHtml.match(/"title"\s*:\s*"([^"]{3,150}?)"/);
+          if (embedTitle && (title === 'Scribd Document' || !title)) {
+            title = embedTitle[1].replace(/\\u0026/g, '&').replace(/\\'/g, "'").trim();
+          }
+          const embedPc = embedHtml.match(/"page_count"\s*:\s*(\d+)/);
+          if (embedPc) pageCount = parseInt(embedPc[1], 10);
+
+          // Secret key if present
+          const embedSecret = embedHtml.match(/original\/([a-z0-9]+)\/\d+/) || embedHtml.match(/original\/([a-z0-9]{8,12})/i);
+          if (embedSecret) secretKey = embedSecret[1];
+
+          // Grab cookies for the image fetches (html.scribd.com requires them)
+          const setCookies = embedRes.headers.getSetCookie?.() || [];
+          for (const c of setCookies) {
+            const pair = c.split(';')[0];
+            if (pair && pair.includes('=')) embedCookieJar.push(pair);
+          }
+
+          // The embed only inlines image paths for the first few pages. The rest
+          // are behind per-page .jsonp tokens — resolve them in parallel now.
+          const jsonpTokens = new Map<number, string>();
+          const jpRe = /pages\/(\d+)-([a-f0-9]+)\.jsonp/gi;
+          while ((m = jpRe.exec(embedHtml)) !== null) {
+            const pageNum = parseInt(m[1], 10);
+            if (!jsonpTokens.has(pageNum)) jsonpTokens.set(pageNum, m[0]);
+          }
+
+          if (embedSession && jsonpTokens.size > 0) {
+            const cookieHeader = embedCookieJar.join('; ');
+            const jobs = [...jsonpTokens.entries()];
+            let cursor = 0;
+
+            const resolveWorker = async () => {
+              while (cursor < jobs.length) {
+                const [pageNum, token] = jobs[cursor++];
+                if (embedImagePaths.has(pageNum)) continue;
+                try {
+                  const r = await fetch(`https://html.scribdassets.com/${embedSession}/${token}`, {
+                    headers: {
+                      'User-Agent': 'WhatsApp/2.23.20.0',
+                      ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+                      'Referer': `https://www.scribd.com/embeds/${id}/content?start_page=1`
+                    },
+                    signal: AbortSignal.timeout(8000)
+                  });
+                  if (r.ok) {
+                    const text = await r.text();
+                    const im = text.match(/images\/(\d+)-([a-f0-9]+)\.jpg/i);
+                    if (im) embedImagePaths.set(pageNum, im[0]);
+                  }
+                } catch (_) {
+                  // Leave this page unresolved; it will be skipped
+                }
+              }
+            };
+
+            await Promise.all(Array.from({ length: Math.min(8, jobs.length) }, () => resolveWorker()));
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[API] Embed fetch note: ${e.message}`);
+      }
+
+      // Strategy 2: Fetch direct document page using Open Graph social crawler headers (bypasses bot challenges)
       try {
         const docRes = await fetch(`https://www.scribd.com/document/${id}`, {
           headers: {
@@ -171,35 +267,23 @@ async function startServer() {
         thumbnailUrl = `https://imgv2-1-f.scribdassets.com/img/document/${id}/111x142/${secretKey}/1?v=1`;
       }
 
-      // Probe original page 1 image accessibility
-      let directImagesAccessible = false;
-      if (secretKey) {
-        try {
-          const probeRes = await fetch(`https://imgv2-1-f.scribdassets.com/img/document/${id}/original/${secretKey}/1?v=1`, {
-            method: 'HEAD',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': 'https://www.scribd.com/'
-            },
-            signal: AbortSignal.timeout(3000)
-          });
-          directImagesAccessible = probeRes.ok;
-        } catch (_) {
-          directImagesAccessible = false;
-        }
-      }
-
-      // Populate full direct page image URLs if accessible
+      // Build per-page image URLs from the embed session (new working pattern).
+      // Each page has a unique token: html.scribd.com/{session}/images/{n}-{token}.jpg
+      // The image fetches need the embed cookies, which the client echoes back
+      // to the proxy via the cookie= query parameter.
       const pageImages: string[] = [];
-      if (directImagesAccessible && secretKey && pageCount > 0) {
-        // Support up to full document pages (safe bound of 120 pages per batch)
-        const effectivePages = Math.min(pageCount, 120);
+      const directImagesAccessible = embedSession && embedImagePaths.size > 0;
+      if (directImagesAccessible && pageCount > 0) {
+        const effectivePages = Math.min(Math.max(pageCount, embedImagePaths.size), 120);
         for (let p = 1; p <= effectivePages; p++) {
-          pageImages.push(`https://imgv2-1-f.scribdassets.com/img/document/${id}/original/${secretKey}/${p}?v=1`);
+          const path = embedImagePaths.get(p);
+          if (path) {
+            pageImages.push(`https://html.scribd.com/${embedSession}/${path}`);
+          }
         }
       }
 
-      console.log(`[API] Metadata resolved: Title="${title}", Pages=${pageCount}, DirectImages=${directImagesAccessible}, PageImages=${pageImages.length}`);
+      console.log(`[API] Metadata resolved: Title="${title}", Pages=${pageCount}, Session=${embedSession || 'none'}, ImageUrls=${pageImages.length}`);
 
       const responseData = {
         id,
@@ -207,8 +291,11 @@ async function startServer() {
         pageCount,
         secretKey,
         pageImages,
-        directImagesAccessible,
-        thumbnailUrl
+        directImagesAccessible: Boolean(directImagesAccessible),
+        thumbnailUrl,
+        // Session cookies from the embed page — the client must echo these back
+        // to /api/proxy-image (cookie= param) for per-page images to be served.
+        embedCookie: embedCookieJar.join('; ')
       };
       metadataCache.set(id, { data: responseData, timestamp: Date.now() });
 
@@ -257,12 +344,21 @@ async function startServer() {
     }
 
     try {
+      // Forward the embed cookies when the client sends them — html.scribd.com
+      // requires the session set by the embed page for per-page images.
+      const embedCookie = req.query.cookie as string;
+      const headers: Record<string, string> = {
+        'User-Agent': 'WhatsApp/2.23.20.0',
+        'Referer': 'https://www.scribd.com/'
+      };
+      if (embedCookie) {
+        headers['Cookie'] = embedCookie;
+      }
+
       const response = await fetch(imageUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-          'Referer': 'https://www.scribd.com/'
-        },
-        signal: AbortSignal.timeout(8000)
+        headers,
+        redirect: 'follow',
+        signal: AbortSignal.timeout(15000)
       });
 
       if (!response.ok) {

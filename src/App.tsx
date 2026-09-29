@@ -277,7 +277,7 @@ export default function App() {
         setCompiledPdfName(`${metadata.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
       }
 
-      const { pageCount, secretKey, pageImages, directImagesAccessible } = metadata;
+      const { pageCount, secretKey, pageImages, directImagesAccessible, embedCookie } = metadata;
       const hasDirectImages = (pageImages && pageImages.length > 0) || (directImagesAccessible && secretKey && pageCount > 0);
 
       if (!hasDirectImages) {
@@ -296,13 +296,14 @@ export default function App() {
       let completedPagesCount = 0;
 
       const fetchSinglePage = async (p: number) => {
+        const cookieParam = embedCookie ? `&cookie=${encodeURIComponent(embedCookie)}` : '';
         let proxiedUrl = '';
         if (pageImages && pageImages.length > 0) {
           const rawUrl = pageImages[p - 1];
-          proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
+          proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}${cookieParam}`;
         } else {
           const rawCdnUrl = `https://imgv2-1-f.scribdassets.com/img/document/${extractedId}/original/${secretKey}/${p}?v=1`;
-          proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(rawCdnUrl)}`;
+          proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(rawCdnUrl)}${cookieParam}`;
         }
 
         let loaded: HTMLImageElement | null = null;
@@ -313,7 +314,7 @@ export default function App() {
           if (!pageImages || pageImages.length === 0) {
             const alternateUrl = `https://imgv2-2-f.scribdassets.com/img/document/${extractedId}/original/${secretKey}/${p}?v=1`;
             try {
-              loaded = await loadImage(`/api/proxy-image?url=${encodeURIComponent(alternateUrl)}`);
+              loaded = await loadImage(`/api/proxy-image?url=${encodeURIComponent(alternateUrl)}${cookieParam}`);
               pageSlots[p - 1] = loaded;
             } catch (_) {
               // Skip unavailable page
