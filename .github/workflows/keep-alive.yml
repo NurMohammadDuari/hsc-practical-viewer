@@ -1,0 +1,25 @@
+name: Keep Alive
+
+# Pings the app every 10 minutes so the free Render instance never
+# sleeps (Render spins down free services after 15 idle minutes).
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping app
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 120 https://hsc-practical-viewer.onrender.com/)
+          echo "Ping response: HTTP $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "::warning::App responded with HTTP $CODE"
+          fi

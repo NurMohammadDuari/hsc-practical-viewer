@@ -125,6 +125,26 @@ export default function App() {
   const [documentId, setDocumentId] = useState<string>('835319016');
   const [previewMode, setPreviewMode] = useState<'pdf' | 'live'>('pdf');
 
+  // Handle Android/iOS share-sheet launches: /share?url=...&text=...&title=...
+  // Pre-fills the input, cleans the address bar, and auto-starts.
+  useEffect(() => {
+    if (!window.location.pathname.startsWith('/share')) return;
+    const params = new URLSearchParams(window.location.search);
+    const shared = params.get('url') || params.get('text') || params.get('title') || '';
+    const match = shared.match(/https?:\/\/[^\s]+/i);
+    const sharedUrl = match ? match[0] : '';
+    if (sharedUrl && /scribd\.com/i.test(sharedUrl)) {
+      setScribdUrl(sharedUrl);
+      window.history.replaceState({}, '', '/');
+      setTimeout(() => {
+        const btn = document.getElementById('compile-pdf-btn') as HTMLButtonElement | null;
+        btn?.click();
+      }, 100);
+    } else {
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
   // Compilation state
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationProgress, setCompilationProgress] = useState(0);

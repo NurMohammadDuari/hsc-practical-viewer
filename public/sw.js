@@ -45,6 +45,10 @@ self.addEventListener('fetch', (event) => {
       if (cachedResponse) {
         return cachedResponse;
       }
+      // Never cache share-target navigations — they carry the shared URL
+      if (event.request.url.includes('/share')) {
+        return fetch(event.request);
+      }
       return fetch(event.request).catch(() => {
         if (event.request.mode === 'navigate') {
           return caches.match('/');

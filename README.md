@@ -2,11 +2,9 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/NurMohammadDuari/hsc-practical-viewer)
 
-## 🌐 Live App
-
-**https://hsc-practical-viewer.onrender.com**
-
-> Free tier: the app sleeps after ~15 min idle; the first visit may take ~30–60s to wake up.
+> ## 🌐 **OPEN THE APP: https://hsc-practical-viewer.onrender.com**
+>
+> Free hosting — if it was idle, the first load takes ~30–60s to wake up.
 
 A fast web app for viewing Scribd documents instantly and saving them as high-quality PDFs — built for HSC students who need practical guides, lab manuals, and reference documents without the clutter.
 
