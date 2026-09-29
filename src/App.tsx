@@ -14,11 +14,35 @@ import {
   X,
   Share,
   FileDown,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 
+type Theme = 'light' | 'dark';
+
 export default function App() {
+  // Theme state (system-aware, persisted, applied before first paint)
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'light';
+    const stored = localStorage.getItem('hsc-theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('hsc-theme', theme);
+
+    // Keep the mobile browser chrome in sync with the theme
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#f5f5f7');
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+
   // PWA install prompt states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState<boolean>(false);
@@ -327,28 +351,55 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#f5f5f7] text-[#1d1d1f] overflow-hidden">
+    <div className="flex flex-col h-screen w-screen bg-[var(--app)] text-[var(--t-primary)] overflow-hidden">
       {/* Header */}
-      <header className="bg-white/70 backdrop-blur-xl border-b border-black/[0.06] px-4 sm:px-6 py-3 flex-shrink-0 flex items-center justify-between z-10">
+      <header className="bg-[var(--surface)] backdrop-blur-xl border-b border-[var(--line)] px-4 sm:px-6 py-3 flex-shrink-0 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
           <img src="/pwa_icon.jpg" alt="App icon" className="w-9 h-9 rounded-[10px] object-cover shadow-sm" />
           <div className="text-left">
-            <h1 className="font-semibold text-[15px] sm:text-base tracking-tight text-[#1d1d1f]">
+            <h1 className="font-semibold text-[15px] sm:text-base tracking-tight text-[var(--t-primary)]">
               HSC Practical Viewer
             </h1>
-            <p className="text-[11px] text-[#6e6e73] leading-tight">
+            <p className="text-[11px] text-[var(--t-secondary)] leading-tight">
               View any Scribd document, or save it as a PDF
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Theme toggle */}
+          <button
+            id="theme-toggle-btn"
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--fill)] hover:bg-[var(--fill-hover)] active:scale-90 text-[var(--t-secondary)] hover:text-[var(--t-primary)] transition-all cursor-pointer"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={theme}
+                initial={{ rotate: -90, opacity: 0, scale: 0.6 }}
+                animate={{ rotate: 0, opacity: 1, scale: 1 }}
+                exit={{ rotate: 90, opacity: 0, scale: 0.6 }}
+                transition={{ duration: 0.18 }}
+                className="flex items-center justify-center"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4" />
+                ) : (
+                  <Moon className="w-4 h-4" />
+                )}
+              </motion.span>
+            </AnimatePresence>
+          </button>
+
           {!isInstalled && (
             <button
               id="pwa-install-header-btn"
               type="button"
               onClick={handleTriggerInstall}
-              className="bg-[#0071e3] hover:bg-[#0077ed] active:scale-[0.97] text-white font-medium text-xs px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer"
+              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.97] text-white font-medium text-xs px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer"
               title="Install as an app on this device"
             >
               <Smartphone className="w-3.5 h-3.5" />
@@ -362,16 +413,16 @@ export default function App() {
       <main className="flex-1 overflow-hidden relative min-h-0">
         <div className="h-full flex flex-col min-h-0">
           {/* Input panel */}
-          <div className="bg-white/60 backdrop-blur-xl border-b border-black/[0.06] p-4 sm:p-5">
+          <div className="bg-[var(--surface)] backdrop-blur-xl border-b border-[var(--line)] p-4 sm:p-5">
             <div className="max-w-3xl mx-auto">
               <form onSubmit={handleCompilePdf} className="flex flex-col sm:flex-row gap-2.5">
-                <div className="flex-1 flex items-center bg-white border border-black/10 focus-within:border-[#0071e3] focus-within:ring-4 focus-within:ring-[#0071e3]/10 px-4 py-2.5 rounded-xl transition-all">
-                  <FileText className="w-4 h-4 text-[#86868b] mr-2.5 flex-shrink-0" />
+                <div className="flex-1 flex items-center bg-[var(--surface-solid)] border border-[var(--line-strong)] focus-within:border-[var(--accent)] focus-within:ring-4 focus-within:ring-[var(--accent-ring)] px-4 py-2.5 rounded-xl transition-all">
+                  <FileText className="w-4 h-4 text-[var(--t-tertiary)] mr-2.5 flex-shrink-0" />
                   <input
                     id="scribd-url-input"
                     type="text"
                     placeholder="Paste a Scribd document link…"
-                    className="bg-transparent border-none text-sm text-[#1d1d1f] placeholder-[#a1a1a6] focus:outline-none w-full"
+                    className="bg-transparent border-none text-sm text-[var(--t-primary)] placeholder-[var(--t-placeholder)] focus:outline-none w-full"
                     value={scribdUrl}
                     onChange={(e) => setScribdUrl(e.target.value)}
                     required
@@ -381,7 +432,7 @@ export default function App() {
                       id="clear-url-btn"
                       type="button"
                       onClick={handleClear}
-                      className="text-[#86868b] hover:text-[#1d1d1f] p-1 rounded-full hover:bg-black/5 transition-colors cursor-pointer flex-shrink-0"
+                      className="text-[var(--t-tertiary)] hover:text-[var(--t-primary)] p-1 rounded-full hover:bg-[var(--fill)] transition-colors cursor-pointer flex-shrink-0"
                       title="Clear"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -394,7 +445,7 @@ export default function App() {
                     id="compile-pdf-btn"
                     type="submit"
                     disabled={isCompiling}
-                    className="bg-[#0071e3] hover:bg-[#0077ed] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-sm px-5 py-2.5 rounded-full transition-all flex items-center gap-1.5 justify-center cursor-pointer whitespace-nowrap"
+                    className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-sm px-5 py-2.5 rounded-full transition-all flex items-center gap-1.5 justify-center cursor-pointer whitespace-nowrap"
                     title="Download as PDF"
                   >
                     {isCompiling ? (
@@ -414,10 +465,10 @@ export default function App() {
                     id="instant-live-view-btn"
                     type="button"
                     onClick={handleInstantLivePreview}
-                    className="bg-black/[0.04] hover:bg-black/[0.08] active:scale-[0.98] text-[#1d1d1f] font-medium text-sm px-4 py-2.5 rounded-full transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                    className="bg-[var(--fill)] hover:bg-[var(--fill-hover)] active:scale-[0.98] text-[var(--t-primary)] font-medium text-sm px-4 py-2.5 rounded-full transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                     title="Read instantly without downloading"
                   >
-                    <Eye className="w-4 h-4 text-[#0066cc]" />
+                    <Eye className="w-4 h-4 text-[var(--accent-text)]" />
                     Read Now
                   </button>
                 </div>
@@ -425,18 +476,18 @@ export default function App() {
 
               {/* Sample links */}
               <div className="flex flex-wrap items-center justify-between gap-3 mt-3.5">
-                <div className="flex items-center gap-1.5 text-[11px] text-[#6e6e73]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#30d158]"></span>
+                <div className="flex items-center gap-1.5 text-[11px] text-[var(--t-secondary)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
                   <span>Full quality — every page, no limits</span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-[#86868b] font-medium">Try:</span>
+                  <span className="text-[11px] text-[var(--t-tertiary)] font-medium">Try:</span>
                   <button
                     id="preset-chem-btn"
                     type="button"
                     onClick={loadChemistrySample}
-                    className="text-[11px] bg-white hover:bg-black/[0.03] text-[#0066cc] px-3 py-1 rounded-full border border-black/[0.08] transition-all flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] bg-[var(--surface-solid)] hover:bg-[var(--fill)] text-[var(--accent-text)] px-3 py-1 rounded-full border border-[var(--line-strong)] transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <BookOpen className="w-3 h-3" /> Chemistry Practical
                   </button>
@@ -444,7 +495,7 @@ export default function App() {
                     id="preset-organic-btn"
                     type="button"
                     onClick={loadReferenceSample}
-                    className="text-[11px] bg-white hover:bg-black/[0.03] text-[#0066cc] px-3 py-1 rounded-full border border-black/[0.08] transition-all flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] bg-[var(--surface-solid)] hover:bg-[var(--fill)] text-[var(--accent-text)] px-3 py-1 rounded-full border border-[var(--line-strong)] transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <FileText className="w-3 h-3" /> Reference Doc
                   </button>
@@ -460,29 +511,29 @@ export default function App() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="bg-white border border-black/[0.06] p-8 rounded-3xl max-w-md w-full text-center shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex flex-col items-center gap-5"
+                className="bg-[var(--surface-solid)] border border-[var(--line)] p-8 rounded-3xl max-w-md w-full text-center shadow-[var(--shadow-card)] flex flex-col items-center gap-5"
               >
                 <div className="relative flex items-center justify-center">
-                  <div className="w-14 h-14 rounded-full border-[3px] border-black/[0.06] border-t-[#0071e3] animate-spin" />
+                  <div className="w-14 h-14 rounded-full border-[3px] border-[var(--fill)] border-t-[var(--accent)] animate-spin" />
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-[17px] text-[#1d1d1f] tracking-tight">Processing document</h3>
-                  <p className="text-[13px] text-[#6e6e73] mt-1 h-5 overflow-hidden">
+                  <h3 className="font-semibold text-[17px] text-[var(--t-primary)] tracking-tight">Processing document</h3>
+                  <p className="text-[13px] text-[var(--t-secondary)] mt-1 h-5 overflow-hidden">
                     {compilationStep}
                   </p>
                 </div>
 
                 <div className="w-full">
-                  <div className="w-full bg-black/[0.06] h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-[var(--fill)] h-1.5 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#0071e3] transition-all duration-300"
+                      className="h-full bg-[var(--accent)] transition-all duration-300"
                       style={{ width: `${compilationProgress}%` }}
                     />
                   </div>
-                  <div className="flex justify-between items-center text-[11px] text-[#86868b] mt-2">
-                    <span>{documentTitle}</span>
-                    <span className="font-medium text-[#1d1d1f]">{compilationProgress}%</span>
+                  <div className="flex justify-between items-center text-[11px] text-[var(--t-tertiary)] mt-2">
+                    <span className="truncate max-w-[70%]">{documentTitle}</span>
+                    <span className="font-medium text-[var(--t-primary)]">{compilationProgress}%</span>
                   </div>
                 </div>
               </motion.div>
@@ -493,19 +544,19 @@ export default function App() {
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white border border-black/[0.06] p-7 rounded-3xl max-w-md text-center flex flex-col items-center gap-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.06)]"
+                className="bg-[var(--surface-solid)] border border-[var(--line)] p-7 rounded-3xl max-w-md text-center flex flex-col items-center gap-3.5 shadow-[var(--shadow-card)]"
               >
-                <div className="w-12 h-12 rounded-full bg-[#ff3b30]/10 flex items-center justify-center">
-                  <AlertCircle className="w-6 h-6 text-[#ff3b30]" />
+                <div className="w-12 h-12 rounded-full bg-[var(--danger-bg)] flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-[var(--danger)]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-[15px] text-[#1d1d1f]">Couldn’t process this document</h3>
-                  <p className="text-[13px] text-[#6e6e73] mt-1.5 leading-relaxed">{compilationError}</p>
+                  <h3 className="font-semibold text-[15px] text-[var(--t-primary)]">Couldn’t process this document</h3>
+                  <p className="text-[13px] text-[var(--t-secondary)] mt-1.5 leading-relaxed">{compilationError}</p>
                 </div>
                 <button
                   id="retry-compilation-btn"
                   onClick={() => handleCompilePdf()}
-                  className="mt-1 bg-[#0071e3] hover:bg-[#0077ed] text-white text-[13px] font-medium px-5 py-2 rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="mt-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[13px] font-medium px-5 py-2 rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" /> Try Again
                 </button>
@@ -519,13 +570,13 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center max-w-md p-6 flex flex-col items-center gap-3"
               >
-                <div className="w-16 h-16 rounded-2xl bg-white border border-black/[0.06] shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1">
-                  <FileDown className="w-7 h-7 text-[#0071e3]" strokeWidth={1.75} />
+                <div className="w-16 h-16 rounded-2xl bg-[var(--surface-solid)] border border-[var(--line)] shadow-[var(--shadow-soft)] flex items-center justify-center mb-1">
+                  <FileDown className="w-7 h-7 text-[var(--accent)]" strokeWidth={1.75} />
                 </div>
-                <h3 className="font-semibold text-[19px] text-[#1d1d1f] tracking-tight">Ready when you are</h3>
-                <p className="text-[13px] text-[#6e6e73] leading-relaxed">
-                  Paste a Scribd link above, then choose <span className="font-medium text-[#1d1d1f]">Get PDF</span> to save
-                  a copy, or <span className="font-medium text-[#1d1d1f]">Read Now</span> to start reading instantly.
+                <h3 className="font-semibold text-[19px] text-[var(--t-primary)] tracking-tight">Ready when you are</h3>
+                <p className="text-[13px] text-[var(--t-secondary)] leading-relaxed">
+                  Paste a Scribd link above, then choose <span className="font-medium text-[var(--t-primary)]">Get PDF</span> to save
+                  a copy, or <span className="font-medium text-[var(--t-primary)]">Read Now</span> to start reading instantly.
                 </p>
               </motion.div>
             )}
@@ -538,13 +589,13 @@ export default function App() {
                 className="w-full h-full flex flex-col gap-3 min-h-0 max-w-5xl"
               >
                 {/* Action bar */}
-                <div className="bg-white border border-black/[0.06] p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between shadow-[0_4px_16px_rgba(0,0,0,0.04)]">
+                <div className="bg-[var(--surface-solid)] border border-[var(--line)] p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between shadow-[var(--shadow-soft)]">
                   <div className="min-w-0 flex-1 text-center md:text-left">
                     <div className="flex items-center justify-center md:justify-start gap-1.5 mb-0.5">
-                      <CheckCircle className="w-3.5 h-3.5 text-[#30d158]" />
-                      <span className="text-[11px] text-[#6e6e73] font-medium uppercase tracking-wide">Ready</span>
+                      <CheckCircle className="w-3.5 h-3.5 text-[var(--success)]" />
+                      <span className="text-[11px] text-[var(--t-secondary)] font-medium uppercase tracking-wide">Ready</span>
                     </div>
-                    <h3 className="font-semibold text-[15px] text-[#1d1d1f] truncate">{documentTitle}</h3>
+                    <h3 className="font-semibold text-[15px] text-[var(--t-primary)] truncate">{documentTitle}</h3>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-center gap-2.5">
@@ -552,21 +603,21 @@ export default function App() {
                       id="direct-download-anchor"
                       href={compiledPdfUrl}
                       download={compiledPdfName}
-                      className="px-5 py-2 bg-[#0071e3] hover:bg-[#0077ed] active:scale-[0.98] text-white text-[13px] font-medium rounded-full transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="px-5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.98] text-white text-[13px] font-medium rounded-full transition-all flex items-center gap-1.5 cursor-pointer"
                     >
                       <Download className="w-4 h-4" />
                       Download
                     </a>
 
                     {/* Segmented control */}
-                    <div className="flex bg-black/[0.05] p-0.5 rounded-lg">
+                    <div className="flex bg-[var(--fill)] p-0.5 rounded-lg">
                       <button
                         id="preview-mode-pdf-btn"
                         onClick={() => setPreviewMode('pdf')}
                         className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                           previewMode === 'pdf'
-                            ? 'bg-white text-[#1d1d1f] shadow-sm'
-                            : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                            ? 'bg-[var(--surface-solid)] text-[var(--t-primary)] shadow-sm'
+                            : 'text-[var(--t-secondary)] hover:text-[var(--t-primary)]'
                         }`}
                       >
                         <FileText className="w-3.5 h-3.5" />
@@ -577,8 +628,8 @@ export default function App() {
                         onClick={() => setPreviewMode('live')}
                         className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                           previewMode === 'live'
-                            ? 'bg-white text-[#1d1d1f] shadow-sm'
-                            : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                            ? 'bg-[var(--surface-solid)] text-[var(--t-primary)] shadow-sm'
+                            : 'text-[var(--t-secondary)] hover:text-[var(--t-primary)]'
                         }`}
                       >
                         <BookOpen className="w-3.5 h-3.5" />
@@ -589,7 +640,7 @@ export default function App() {
                     <button
                       id="recompile-btn"
                       onClick={() => handleCompilePdf()}
-                      className="p-2 bg-black/[0.04] hover:bg-black/[0.08] text-[#6e6e73] hover:text-[#1d1d1f] rounded-full transition-colors cursor-pointer"
+                      className="p-2 bg-[var(--fill)] hover:bg-[var(--fill-hover)] text-[var(--t-secondary)] hover:text-[var(--t-primary)] rounded-full transition-colors cursor-pointer"
                       title="Refresh"
                     >
                       <RefreshCw className="w-4 h-4" />
@@ -598,23 +649,23 @@ export default function App() {
                 </div>
 
                 {/* Preview window */}
-                <div className="flex-1 bg-white border border-black/[0.06] rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.06)] relative min-h-0 flex flex-col">
-                  <div className="bg-[#f5f5f7] px-4 py-2 border-b border-black/[0.06] flex items-center justify-between text-xs text-[#6e6e73]">
+                <div className="flex-1 bg-[var(--surface-solid)] border border-[var(--line)] rounded-2xl overflow-hidden shadow-[var(--shadow-card)] relative min-h-0 flex flex-col">
+                  <div className="bg-[var(--surface-2)] px-4 py-2 border-b border-[var(--line)] flex items-center justify-between text-xs text-[var(--t-secondary)]">
                     <span className="flex items-center gap-1.5 font-medium">
-                      <Eye className="w-3.5 h-3.5 text-[#0071e3]" />
+                      <Eye className="w-3.5 h-3.5 text-[var(--accent)]" />
                       {previewMode === 'pdf' ? 'PDF Preview' : 'Scribd Reader'}
                     </span>
                     <a
                       href={previewMode === 'pdf' ? compiledPdfUrl || '#' : `https://www.scribd.com/document/${documentId}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="hover:text-[#1d1d1f] flex items-center gap-1 text-[11px] transition-colors"
+                      className="hover:text-[var(--t-primary)] flex items-center gap-1 text-[11px] transition-colors"
                     >
                       Open in new tab <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
 
-                  <div className="flex-1 relative bg-white">
+                  <div className="flex-1 relative bg-[var(--surface-solid)]">
                     {previewMode === 'pdf' ? (
                       <iframe
                         id="pdf-preview-frame"
@@ -647,12 +698,12 @@ export default function App() {
             initial={{ opacity: 0, y: 40, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.97 }}
-            className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-50 bg-white/90 backdrop-blur-xl border border-black/[0.08] rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)]"
+            className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-50 bg-[var(--surface)] backdrop-blur-xl border border-[var(--line-strong)] rounded-2xl p-4 shadow-[var(--shadow-pop)]"
           >
             <button
               type="button"
               onClick={() => setShowInstallBanner(false)}
-              className="text-[#86868b] hover:text-[#1d1d1f] p-1 rounded-full hover:bg-black/5 transition-colors absolute top-3 right-3 cursor-pointer"
+              className="text-[var(--t-tertiary)] hover:text-[var(--t-primary)] p-1 rounded-full hover:bg-[var(--fill)] transition-colors absolute top-3 right-3 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -660,8 +711,8 @@ export default function App() {
             <div className="flex items-start gap-3">
               <img src="/pwa_icon.jpg" alt="App icon" className="w-11 h-11 rounded-[10px] object-cover shadow-sm flex-shrink-0" />
               <div className="flex-1 pr-5">
-                <h3 className="font-semibold text-sm text-[#1d1d1f]">Install HSC Practical Viewer</h3>
-                <p className="text-[12px] text-[#6e6e73] mt-0.5 leading-snug">
+                <h3 className="font-semibold text-sm text-[var(--t-primary)]">Install HSC Practical Viewer</h3>
+                <p className="text-[12px] text-[var(--t-secondary)] mt-0.5 leading-snug">
                   Add it to your {detectedPlatform.os} home screen for one-tap access.
                 </p>
               </div>
@@ -671,7 +722,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setShowInstallBanner(false)}
-                className="text-[13px] text-[#0066cc] hover:underline px-3 py-1.5 rounded-full transition-colors font-medium cursor-pointer"
+                className="text-[13px] text-[var(--accent-text)] hover:underline px-3 py-1.5 rounded-full transition-colors font-medium cursor-pointer"
               >
                 Not now
               </button>
@@ -679,7 +730,7 @@ export default function App() {
                 id="install-now-popup-btn"
                 type="button"
                 onClick={handleTriggerInstall}
-                className="bg-[#0071e3] hover:bg-[#0077ed] text-white font-medium text-[13px] px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer"
+                className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium text-[13px] px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 Install
               </button>
@@ -696,44 +747,44 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl relative"
+              className="bg-[var(--surface-solid)] rounded-3xl max-w-sm w-full p-6 shadow-2xl relative"
             >
               <button
                 type="button"
                 onClick={() => setShowInstallGuideModal(false)}
-                className="absolute top-4 right-4 text-[#86868b] hover:text-[#1d1d1f] p-1 rounded-full hover:bg-black/5 cursor-pointer transition-colors"
+                className="absolute top-4 right-4 text-[var(--t-tertiary)] hover:text-[var(--t-primary)] p-1 rounded-full hover:bg-[var(--fill)] cursor-pointer transition-colors"
               >
                 <X className="w-4.5 h-4.5" />
               </button>
 
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-[#0071e3]/10 flex items-center justify-center">
-                  <Smartphone className="w-5 h-5 text-[#0071e3]" />
+                <div className="w-10 h-10 rounded-xl bg-[var(--accent-ring)] flex items-center justify-center">
+                  <Smartphone className="w-5 h-5 text-[var(--accent)]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-[15px] text-[#1d1d1f]">Install this app</h3>
-                  <p className="text-[11px] text-[#86868b]">{detectedPlatform.os} · {detectedPlatform.browser}</p>
+                  <h3 className="font-semibold text-[15px] text-[var(--t-primary)]">Install this app</h3>
+                  <p className="text-[11px] text-[var(--t-tertiary)]">{detectedPlatform.os} · {detectedPlatform.browser}</p>
                 </div>
               </div>
 
-              <div className="space-y-3 text-[13px] text-[#1d1d1f]">
+              <div className="space-y-3 text-[13px] text-[var(--t-primary)]">
                 {detectedPlatform.isIOS ? (
-                  <div className="bg-[#f5f5f7] p-3.5 rounded-2xl">
+                  <div className="bg-[var(--fill)] p-3.5 rounded-2xl">
                     <h4 className="font-semibold mb-1 flex items-center gap-1.5 text-sm">
-                      <Share className="w-4 h-4 text-[#0071e3]" /> On iPhone & iPad
+                      <Share className="w-4 h-4 text-[var(--accent)]" /> On iPhone & iPad
                     </h4>
-                    <p className="text-[#6e6e73] text-[12.5px] leading-relaxed">
-                      Tap the <strong className="text-[#1d1d1f]">Share</strong> button in Safari, then choose{' '}
-                      <strong className="text-[#1d1d1f]">Add to Home Screen</strong>.
+                    <p className="text-[var(--t-secondary)] text-[12.5px] leading-relaxed">
+                      Tap the <strong className="text-[var(--t-primary)]">Share</strong> button in Safari, then choose{' '}
+                      <strong className="text-[var(--t-primary)]">Add to Home Screen</strong>.
                     </p>
                   </div>
                 ) : (
-                  <div className="bg-[#f5f5f7] p-3.5 rounded-2xl">
+                  <div className="bg-[var(--fill)] p-3.5 rounded-2xl">
                     <h4 className="font-semibold mb-1 flex items-center gap-1.5 text-sm">
-                      <Smartphone className="w-4 h-4 text-[#0071e3]" /> One-tap install
+                      <Smartphone className="w-4 h-4 text-[var(--accent)]" /> One-tap install
                     </h4>
-                    <p className="text-[#6e6e73] text-[12.5px] leading-relaxed">
-                      Tap <strong className="text-[#1d1d1f]">Install</strong> and confirm when your browser asks. The app
+                    <p className="text-[var(--t-secondary)] text-[12.5px] leading-relaxed">
+                      Tap <strong className="text-[var(--t-primary)]">Install</strong> and confirm when your browser asks. The app
                       will appear on your home screen.
                     </p>
                   </div>
@@ -743,7 +794,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setShowInstallGuideModal(false)}
-                className="mt-5 w-full bg-[#0071e3] hover:bg-[#0077ed] text-white font-medium text-sm px-5 py-2.5 rounded-full transition-all cursor-pointer"
+                className="mt-5 w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium text-sm px-5 py-2.5 rounded-full transition-all cursor-pointer"
               >
                 Got it
               </button>
