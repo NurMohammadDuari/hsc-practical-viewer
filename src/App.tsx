@@ -360,6 +360,19 @@ export default function App() {
         throw new Error('The pages of this document could not be retrieved. It may be fully restricted on Scribd.');
       }
 
+      // Scribd sometimes serves the same image for every page number (CDN-side
+      // restriction). Detect duplicates so we never compile a broken PDF where
+      // all pages show page 1, and point the user to the embedded reader.
+      if (loadedImages.length > 1 && totalPagesToFetch > 1) {
+        const first = makeThumbnail(loadedImages[0]);
+        const second = makeThumbnail(loadedImages[1]);
+        if (first && second && first === second) {
+          throw new Error(
+            'Scribd is currently only serving the first page of this document (they recently tightened their CDN). Try “Read Now” to view all pages in the embedded reader.'
+          );
+        }
+      }
+
       // Step 3: Assemble the PDF
       setCompilationStep('Assembling your PDF…');
       setCompilationProgress(90);
